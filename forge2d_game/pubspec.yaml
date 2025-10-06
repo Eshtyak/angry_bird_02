@@ -1,0 +1,24 @@
+name: forge2d_game
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  characters: ^1.4.0
+  flame: ^1.32.0
+  flame_forge2d: ^0.19.2
+  flame_kenney_xml: ^0.1.1+16
+  xml: ^6.6.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

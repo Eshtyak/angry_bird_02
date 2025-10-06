@@ -1,26 +1,37 @@
 name: angry_bird_game_02
-description: A simple Angry Birds style game using Flutter + Flame + Forge2D
+description: Angry Birds style game with Flutter + Flame + Forge2D
 publish_to: "none"
 
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.4.0 <4.0.0"
+  sdk: ">=3.4.0 <4.0.0"   # 根据你本机 Dart/Flutter 调整区间即可
 
 dependencies:
   flutter:
     sdk: flutter
-  flame: ^1.15.0
-  flame_forge2d: ^0.19.2
+
+  # 基础/引擎
+  characters: ^1.4.0
+  flame: ^1.32.0            # 支持 bridge_mixins
+  flame_forge2d: ^0.19.2    # 与上面 flame 兼容
+  forge2d: ^0.14.2
+  xml: ^6.6.1
+  flame_kenney_xml: ^0.1.1+16
+
+  # 可选
+  flame_audio: ^2.10.1
+  flutter_svg: ^2.0.10+1
+  cupertino_icons: ^1.0.6
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
-
   assets:
+    - assets/
     - assets/images/
     - assets/audio/
