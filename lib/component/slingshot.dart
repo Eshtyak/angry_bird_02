@@ -1,57 +1,61 @@
-// lib/component/slingshot.dart
 import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flame/components.dart';
 import 'package:flame_forge2d/flame_forge2d.dart';
 import 'bird.dart';
+import 'trajectory_helper.dart';
 
 enum TriggerTarget { both, birdOnly, slingOnly }
 
-/// 弹弓：静态“支点”刚体 + 外部驱动的拖拽/发射逻辑
-/// 已移除所有拖拽保护（无最大拉距、无角度扇形限制）。
 class Slingshot extends BodyComponent {
-  final Vector2 pivot;                   // 世界坐标中的支点
-  final TriggerTarget trigger;           // 允许从哪里开始拖：both / birdOnly / slingOnly
-
-  // 保留这些参数以兼容外部调用，但已不再参与限制
-  final double maxPull;                  // （已忽略）
-  final double backSectorDeg;            // （已忽略）
-
-  // 仍然生效的手感参数
-  final double minPullToFire;            // 最小发射拉距（米）
-  final double powerK;                   // 发射力度系数
-  final double startDetectRadius;        // 允许开始拖拽的半径（米）
+  final Vector2 pivot;
+  final TriggerTarget trigger;
+  final double maxPull;
+  final double minPullToFire;
+  final double powerK;
+  final double startDetectRadius;
+  final double backSectorDeg;
+  final double maxAngleDeg;
 
   Slingshot(
       this.pivot, {
         this.trigger = TriggerTarget.both,
-        this.maxPull = 7.0,                  // 保留但不使用
-        this.minPullToFire = 0.6,
-        this.powerK = 2.2,
-        this.startDetectRadius = 4.0,
-        this.backSectorDeg = 130,            // 保留但不使用
+        this.maxPull = 10.5,          // ✅ 限制最大拉距
+        this.minPullToFire = 1.5,
+        this.powerK = 10.0,           // ✅ 更强发射力度
+        this.startDetectRadius = 6.0,
+        this.backSectorDeg = 130,
+        this.maxAngleDeg = 75,       // ✅ 可拉更高角度
       });
 
-  late Vector2 _pivot;                   // 刚体真实位置
-  Bird? _loaded;                         // 当前装填的鸟
+  late Vector2 _pivot;
+  Bird? _loaded;
   bool _dragging = false;
-  Vector2 _pull = Vector2.zero();        // 从支点指向手指（世界坐标）
-  double _detectR = 0;                   // 实际检测半径（随鸟半径自适应）
+  Vector2 _pull = Vector2.zero();
+  double _detectR = 0;
+
+  TrajectoryLine? _trajectory;
+  _RubberBand? _rubber;
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
     renderBody = false;
 
-    // 贴图
+    // 弹弓底座贴图
     final img = await game.images.load('slingshot.webp');
     add(SpriteComponent(
       sprite: Sprite(img),
-      size: Vector2.all(6),              // 世界单位（米）
+      size: Vector2.all(6),
       anchor: Anchor.center,
     ));
+
+    // 橡皮带
+    _rubber = _RubberBand(pivot);
+    game.add(_rubber!);
   }
 
-  /// 关卡调用：把鸟“装填”到弹弓
+  // ======== 装填小鸟 ========
   void load(Bird bird) {
     _loaded = bird;
     final b = bird.body;
@@ -61,7 +65,6 @@ class Slingshot extends BodyComponent {
       ..angularVelocity = 0
       ..setAwake(true);
 
-    // 自适应拖拽检测范围：取基础半径与 1.3×鸟半径 的较大值
     double r = startDetectRadius;
     try {
       r = math.max(r, bird.radius * 1.3);
@@ -69,6 +72,7 @@ class Slingshot extends BodyComponent {
     _detectR = r;
   }
 
+  // ======== 判断是否可开始拖拽 ========
   bool _canStartAt(Vector2 worldP) {
     final r = _detectR > 0 ? _detectR : startDetectRadius;
     final nearSling = (worldP - _pivot).length <= r;
@@ -85,50 +89,90 @@ class Slingshot extends BodyComponent {
     }
   }
 
-  // ===== 给 Level1/Game 调用的三个方法（传入世界坐标） =====
-
+  // ======== 拖拽开始 ========
   void beginDrag(Vector2 worldP) {
     if (_loaded == null) return;
     if (_canStartAt(worldP)) _dragging = true;
   }
 
+  // ======== 拖拽中（显示辅助线） ========
   void dragMove(Vector2 worldP) {
     if (!_dragging || _loaded == null) return;
 
-    // 直接使用手指相对支点的向量（不做任何长度/角度限制）
-    _pull = worldP - _pivot;
+    Vector2 pull = worldP - _pivot;
 
+    // 限制最大拉距
+    if (pull.length > maxPull) {
+      pull.normalize();
+      pull *= maxPull;
+    }
+
+    // 限制仰角范围
+    final angle = pull.angleTo(Vector2(-1, 0));
+    final maxRad = math.pi * maxAngleDeg / 180;
+    if (angle.abs() > maxRad) {
+      final sign = angle.isNegative ? -1 : 1;
+      final clampedAngle = sign * maxRad;
+      final len = pull.length;
+      pull = Vector2(
+        -math.cos(clampedAngle) * len,
+        math.sin(clampedAngle) * len,
+      );
+    }
+
+    _pull = pull;
     _loaded!.body
       ..setTransform(_pivot + _pull, 0)
       ..linearVelocity = Vector2.zero()
       ..angularVelocity = 0;
+
+    // 橡皮带更新
+    _rubber?.updateStretch(_pivot, _pivot + _pull);
+
+    // 辅助线更新
+    _trajectory ??= TrajectoryLine();
+    if (!_trajectory!.isMounted) game.add(_trajectory!);
+
+    final gravityY = world.gravity.y;
+    final predictedVelocity = (-_pull) * powerK;
+    _trajectory!.updatePoints(_pivot, predictedVelocity, gravityY);
   }
 
+  // ======== 拖拽结束（发射） ========
   void endDrag() {
     if (!_dragging || _loaded == null) return;
+
+    _trajectory?.removeFromParent();
+    _trajectory = null;
+    _rubber?.updateStretch(_pivot, _pivot);
 
     final b = _loaded!.body;
     final L = _pull.length;
 
     if (L < minPullToFire) {
-      // 回位，不发射
+      // 没拉够，回位
       b
         ..setTransform(_pivot, 0)
         ..linearVelocity = Vector2.zero()
         ..angularVelocity = 0
         ..setAwake(true);
     } else {
-      // 发射前把鸟从支点沿拉伸方向移出一个很小的“安全间隙”
+      // 正常发射
       final dir = _pull.normalized();
-      final start = _pivot + dir * (_loaded!.radius + 0.1); // 0.1m 安全间隙
+      final baseStart = _pivot + dir * (_loaded!.radius + 0.5);
+
+      // 防止地面碰撞
+      final safeStart = Vector2(baseStart.x, math.min(baseStart.y, _pivot.y - 0.8));
+
+      // 加强力度
+      final impulse = (-_pull) * powerK * b.mass * 1.8;
+
       b
-        ..setTransform(start, 0)
+        ..setTransform(safeStart, 0)
         ..setAwake(true)
         ..linearVelocity = Vector2.zero()
-        ..angularVelocity = 0;
-
-      // 与拉向相反的冲量
-      b.applyLinearImpulse((-_pull) * powerK * b.mass);
+        ..angularVelocity = 0
+        ..applyLinearImpulse(impulse);
     }
 
     _dragging = false;
@@ -136,7 +180,7 @@ class Slingshot extends BodyComponent {
     _loaded = null;
   }
 
-  // ===== 支点刚体：做成 sensor，避免与小鸟发生物理碰撞 =====
+  // ======== 弹弓本体刚体 ========
   @override
   Body createBody() {
     final shape = CircleShape()..radius = 0.8;
@@ -146,9 +190,34 @@ class Slingshot extends BodyComponent {
         shape,
         friction: 0.2,
         density: 1.0,
-        isSensor: true,                 // 不参与碰撞，只用于检测
+        isSensor: true,
       ));
     _pivot = body.position.clone();
     return body;
+  }
+}
+
+// ========== 橡皮带组件 ==========
+class _RubberBand extends Component {
+  Vector2 anchor;
+  Vector2 end;
+  final Paint _paint = Paint()
+    ..color = const Color(0xFF7B3F00)
+    ..strokeWidth = 0.15
+    ..style = PaintingStyle.stroke;
+
+  _RubberBand(this.anchor) : end = anchor.clone();
+
+  void updateStretch(Vector2 pivot, Vector2 birdPos) {
+    anchor = pivot;
+    end = birdPos;
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final leftAnchor = Vector2(anchor.x - 0.3, anchor.y);
+    final rightAnchor = Vector2(anchor.x + 0.3, anchor.y);
+    canvas.drawLine(leftAnchor.toOffset(), end.toOffset(), _paint);
+    canvas.drawLine(rightAnchor.toOffset(), end.toOffset(), _paint);
   }
 }

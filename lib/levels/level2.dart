@@ -9,7 +9,7 @@ import '../component/obstacle.dart';
 import '../component/slingshot.dart';
 import '../component/trajectory_helper.dart';
 
-class Level1 extends Component with HasGameRef<Forge2DGame> {
+class Level2 extends Component with HasGameRef<Forge2DGame> {
   static const bool DEBUG_LINE = true;
   static const double groundTopRatio = 0.28;
 
@@ -18,11 +18,10 @@ class Level1 extends Component with HasGameRef<Forge2DGame> {
   Vector2? lastPull;
   late double groundY;
 
-  // ===== 新增：发射计数系统 =====
-  final int maxShots = 3;    // ✅ 三次发射机会
+  final int maxShots = 3;
   int currentShot = 0;
-  Bird? activeBird;           // 当前发射中的小鸟
-  bool birdInFlight = false;  // 是否飞行中
+  Bird? activeBird;
+  bool birdInFlight = false;
 
   @override
   Future<void> onLoad() async {
@@ -63,43 +62,89 @@ class Level1 extends Component with HasGameRef<Forge2DGame> {
     );
     await gameRef.world.add(slingshot);
 
-    // 4. 加载第一只鸟
+    // 4. 第一只鸟
     await _loadNextBird();
 
-    // 5. 小猪
+    // ============================================================
+    // 5. 多层猪阵（3只）
+    // ============================================================
     final pigSprite = Sprite(await gameRef.images.load('JellyPig.png'));
-    await gameRef.world.add(
-      Pig(Vector2(rect.right - 12, groundY - 2.4), pigSprite, radius: 2.4),
-    );
 
-    // 6. 障碍物
-    final baseX = rect.right - 18;
-    final baseY = groundY;
     await gameRef.world.addAll([
+      // 底层
+      Pig(Vector2(rect.right - 20, groundY - 2.4), pigSprite, radius: 2.4),
+      // 中层
+      Pig(Vector2(rect.right - 15, groundY - 8.0), pigSprite, radius: 2.4),
+      // 顶层
+      Pig(Vector2(rect.right - 17, groundY - 14.0), pigSprite, radius: 2.4),
+    ]);
+
+    // ============================================================
+    // 6. 障碍物塔结构
+    // ============================================================
+    final baseX = rect.right - 17;
+    final baseY = groundY;
+
+    await gameRef.world.addAll([
+      // 第一层底部支撑
       Obstacle(
-        initialPosition: Vector2(baseX - 2.5, baseY - 1.5),
+        initialPosition: Vector2(baseX - 4, baseY - 1.5),
         halfSize: Vector2(1.5, 1.5),
         kind: ObstacleKind.wood,
       ),
       Obstacle(
-        initialPosition: Vector2(baseX + 2.5, baseY - 1.5),
+        initialPosition: Vector2(baseX + 4, baseY - 1.5),
         halfSize: Vector2(1.5, 1.5),
         kind: ObstacleKind.wood,
       ),
+
+      // 第一层横梁
       Obstacle(
-        initialPosition: Vector2(baseX, baseY - 4.0),
-        halfSize: Vector2(4.0, 0.6),
-        initialAngle: 0.04,
+        initialPosition: Vector2(baseX, baseY - 3.0),
+        halfSize: Vector2(5.0, 0.6),
         kind: ObstacleKind.wood,
       ),
+
+      // 第二层立柱
       Obstacle(
-        initialPosition: Vector2(baseX, baseY - 6.0),
-        halfSize: Vector2(1.2, 1.6),
+        initialPosition: Vector2(baseX - 3, baseY - 5.5),
+        halfSize: Vector2(1.2, 2.0),
         kind: ObstacleKind.barrel,
+      ),
+      Obstacle(
+        initialPosition: Vector2(baseX + 3, baseY - 5.5),
+        halfSize: Vector2(1.2, 2.0),
+        kind: ObstacleKind.barrel,
+      ),
+
+      // 第二层横梁
+      Obstacle(
+        initialPosition: Vector2(baseX, baseY - 8.0),
+        halfSize: Vector2(4.5, 0.6),
+        kind: ObstacleKind.wood,
+      ),
+
+      // 第三层立柱
+      Obstacle(
+        initialPosition: Vector2(baseX - 2, baseY - 10.5),
+        halfSize: Vector2(1.2, 2.0),
+        kind: ObstacleKind.wood,
+      ),
+      Obstacle(
+        initialPosition: Vector2(baseX + 2, baseY - 10.5),
+        halfSize: Vector2(1.2, 2.0),
+        kind: ObstacleKind.wood,
+      ),
+
+      // 顶层横梁
+      Obstacle(
+        initialPosition: Vector2(baseX, baseY - 13.0),
+        halfSize: Vector2(3.5, 0.5),
+        kind: ObstacleKind.wood,
       ),
     ]);
 
-// === Invisible Walls ===
+    // === Invisible Walls ===
     final wallRect = gameRef.camera.visibleWorldRect;
     final walls = [
       EdgeShape()
@@ -120,7 +165,7 @@ class Level1 extends Component with HasGameRef<Forge2DGame> {
   // =====================================================
 
   void handlePointerDown(Vector2 p) {
-    if (birdInFlight) return; // ✅ 飞行中不能拉下一只
+    if (birdInFlight) return;
     slingshot.beginDrag(p);
   }
 
@@ -144,7 +189,7 @@ class Level1 extends Component with HasGameRef<Forge2DGame> {
     trajectory?.removeFromParent();
     trajectory = null;
     lastPull = null;
-    birdInFlight = true; // ✅ 当前小鸟开始飞行
+    birdInFlight = true;
   }
 
   void handleTap(Vector2 p) {}
@@ -155,7 +200,7 @@ class Level1 extends Component with HasGameRef<Forge2DGame> {
 
   Future<void> _loadNextBird() async {
     if (currentShot >= maxShots) {
-      print("🎯 所有小鸟已发射完毕！");
+      print("All birds launched!");
       return;
     }
 
@@ -174,13 +219,7 @@ class Level1 extends Component with HasGameRef<Forge2DGame> {
     activeBird = bird;
     birdInFlight = false;
     currentShot++;
-
-    print("第 $currentShot 次发射准备完成");
   }
-
-  // =====================================================
-  // ============ 检测当前小鸟状态 ========================
-  // =====================================================
 
   @override
   void update(double dt) {
@@ -189,7 +228,6 @@ class Level1 extends Component with HasGameRef<Forge2DGame> {
     if (activeBird == null) return;
     final pos = activeBird!.body.position;
 
-    // ✅ 出屏幕或静止 => 装填下一只
     if (birdInFlight) {
       final outOfBounds = pos.x > gameRef.camera.visibleWorldRect.right + 10 ||
           pos.y > gameRef.camera.visibleWorldRect.bottom + 10;
@@ -199,7 +237,7 @@ class Level1 extends Component with HasGameRef<Forge2DGame> {
         activeBird!.removeFromParent();
         activeBird = null;
         birdInFlight = false;
-        _loadNextBird(); // 自动装填下一只
+        _loadNextBird();
       }
     }
   }

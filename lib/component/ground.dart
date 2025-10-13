@@ -1,18 +1,26 @@
 import 'dart:ui' as ui;
 import 'package:flame_forge2d/flame_forge2d.dart';
+import 'package:flame/components.dart';
 
 class Ground extends BodyComponent {
-  Ground(this.rect, {this.y}) : super(renderBody: false);
+  final ui.Rect rect;     // ✅ 明确使用 ui.Rect
+  final double y;
 
-  final ui.Rect rect;
-  final double? y; // 可选：外部指定地面高度
+  Ground(this.rect, {required this.y});
 
   @override
   Body createBody() {
-    final gy = y ?? rect.bottom; // 默认贴底
-    final shape = EdgeShape()..set(Vector2(rect.left, gy), Vector2(rect.right, gy));
-    final body = world.createBody(BodyDef(position: Vector2.zero()));
-    body.createFixtureFromShape(shape, friction: 0.8);
+    // ✅ 有厚度的地面，防止鸟穿透
+    final shape = PolygonShape()
+      ..setAsBox(rect.width / 2, 0.3, Vector2(rect.center.dx, y + 0.15), 0);
+    final def = BodyDef(type: BodyType.static);
+    final body = world.createBody(def)
+      ..createFixture(FixtureDef(
+        shape,
+        friction: 0.7,
+        restitution: 0.0,
+        density: 1.0,
+      ));
     return body;
   }
 }

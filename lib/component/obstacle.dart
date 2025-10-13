@@ -1,17 +1,18 @@
-// lib/component/obstacle.dart
 import 'package:flame/components.dart';
 import 'package:flame_forge2d/flame_forge2d.dart';
 
 enum ObstacleKind { wood, barrel }
 
-/// 可复用的矩形障碍物（米为单位）
-class Obstacle extends BodyComponent {
-  // 用“initial*”避免与父类成员名冲突
-  final Vector2 initialPosition; // 世界坐标（米）
-  final Vector2 halfSize;        // 半宽半高（米）
-  final double initialAngle;     // 弧度
+class Obstacle extends BodyComponent with ContactCallbacks {
+  final Vector2 initialPosition;
+  final Vector2 halfSize;
+  final double initialAngle;
   final ObstacleKind kind;
   final BodyType bodyType;
+
+  late Sprite _sprite;
+  double baseDamage = 0;
+  double velocityFactor = 5.0;
 
   Obstacle({
     required this.initialPosition,
@@ -19,24 +20,22 @@ class Obstacle extends BodyComponent {
     this.initialAngle = 0,
     this.kind = ObstacleKind.wood,
     this.bodyType = BodyType.dynamic,
-  }) : super() {
-    // 不能放在初始化列表里设置实例成员
-    renderBody = false;
-  }
-
-  late Sprite _sprite;
+  }) : super(renderBody: false);
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
 
-    // BodyComponent 本身就有 gameRef，不要再混入 HasGameReference
     switch (kind) {
       case ObstacleKind.wood:
         _sprite = Sprite(await game.images.load('Wooden.png'));
+        baseDamage = 50;
+        velocityFactor = 5.0;
         break;
       case ObstacleKind.barrel:
         _sprite = Sprite(await game.images.load('Barrel.webp'));
+        baseDamage = 55;
+        velocityFactor = 6.0;
         break;
     }
 
@@ -51,15 +50,15 @@ class Obstacle extends BodyComponent {
   Body createBody() {
     final shape = PolygonShape()..setAsBoxXY(halfSize.x, halfSize.y);
 
-    final friction = (kind == ObstacleKind.wood) ? 0.5 : 0.3;
-    final density  = (kind == ObstacleKind.wood) ? 1.0 : 0.6;
+    final friction = (kind == ObstacleKind.wood) ? 0.5 : 0.4;
+    final density = (kind == ObstacleKind.wood) ? 1.0 : 0.7;
 
     final fixture = FixtureDef(
       shape,
       friction: friction,
       density: density,
       restitution: 0.05,
-    );
+    )..userData = this; // ✅ 必须绑定 userData
 
     final def = BodyDef(
       type: bodyType,
@@ -69,5 +68,11 @@ class Obstacle extends BodyComponent {
     );
 
     return world.createBody(def)..createFixture(fixture);
+  }
+
+  double computeImpactDamage() {
+    final speed = body.linearVelocity.length;
+    final impactDamage = baseDamage + speed * velocityFactor * 1.5;
+    return impactDamage;
   }
 }
