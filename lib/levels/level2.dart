@@ -8,8 +8,10 @@ import '../component/pig.dart';
 import '../component/obstacle.dart';
 import '../component/slingshot.dart';
 import '../component/trajectory_helper.dart';
+import 'level_manager.dart';
+import '../component/game.dart';
 
-class Level2 extends Component with HasGameRef<Forge2DGame> {
+class Level2 extends Component with HasGameRef<MyPhysicsGame> {
   static const bool DEBUG_LINE = true;
   static const double groundTopRatio = 0.28;
 
@@ -18,10 +20,16 @@ class Level2 extends Component with HasGameRef<Forge2DGame> {
   Vector2? lastPull;
   late double groundY;
 
+  // Gameplay state
   final int maxShots = 3;
   int currentShot = 0;
+  int pigsAlive = 0;
+  int score = 0;
+
   Bird? activeBird;
   bool birdInFlight = false;
+  bool levelCompleted = false;
+  double timeLeft = 60.0;
 
   @override
   Future<void> onLoad() async {
@@ -29,7 +37,7 @@ class Level2 extends Component with HasGameRef<Forge2DGame> {
 
     final rect = gameRef.camera.visibleWorldRect;
 
-    // 1. 背景
+    // Background
     final bg = await gameRef.images.load('background.jpg');
     add(SpriteComponent(
       sprite: Sprite(bg),
@@ -38,7 +46,7 @@ class Level2 extends Component with HasGameRef<Forge2DGame> {
       anchor: Anchor.topLeft,
     ));
 
-    // 2. 地面
+    // Ground
     groundY = rect.bottom - rect.height * groundTopRatio;
     await gameRef.world.add(Ground(rect, y: groundY));
 
@@ -50,7 +58,7 @@ class Level2 extends Component with HasGameRef<Forge2DGame> {
         ..paint = (ui.Paint()..color = const ui.Color(0x80FF0000)));
     }
 
-    // 3. 弹弓
+    // Slingshot
     final Vector2 slingPivot = Vector2(rect.left + 12, groundY - 3.5);
     slingshot = Slingshot(
       slingPivot,
@@ -62,69 +70,61 @@ class Level2 extends Component with HasGameRef<Forge2DGame> {
     );
     await gameRef.world.add(slingshot);
 
-    // 4. 第一只鸟
+    // Bird
     await _loadNextBird();
 
-    // ============================================================
-    // 5. 多层猪阵（3只）
-    // ============================================================
+    // Pigs (raised slightly above the ground)
     final pigSprite = Sprite(await gameRef.images.load('JellyPig.png'));
+    final pigs = [
+      Pig(Vector2(rect.right - 20, groundY - 3.5), pigSprite, radius: 2.4),
+      Pig(Vector2(rect.right - 15, groundY - 9.5), pigSprite, radius: 2.4),
+      Pig(Vector2(rect.right - 17, groundY - 15.5), pigSprite, radius: 2.4),
+    ];
+    pigsAlive = pigs.length;
+    await gameRef.world.addAll(pigs);
 
-    await gameRef.world.addAll([
-      // 底层
-      Pig(Vector2(rect.right - 20, groundY - 2.4), pigSprite, radius: 2.4),
-      // 中层
-      Pig(Vector2(rect.right - 15, groundY - 8.0), pigSprite, radius: 2.4),
-      // 顶层
-      Pig(Vector2(rect.right - 17, groundY - 14.0), pigSprite, radius: 2.4),
-    ]);
+    // ✅ Delay to let the ground settle
+    await Future.delayed(const Duration(milliseconds: 200));
 
-    // ============================================================
-    // 6. 障碍物塔结构
-    // ============================================================
+    // Tower structure (non-overlapping, stable layout)
     final baseX = rect.right - 17;
     final baseY = groundY;
-
     await gameRef.world.addAll([
-      // 第一层底部支撑
+      // Bottom blocks
       Obstacle(
-        initialPosition: Vector2(baseX - 4, baseY - 1.5),
+        initialPosition: Vector2(baseX - 4, baseY - 2.0),
         halfSize: Vector2(1.5, 1.5),
         kind: ObstacleKind.wood,
       ),
       Obstacle(
-        initialPosition: Vector2(baseX + 4, baseY - 1.5),
+        initialPosition: Vector2(baseX + 4, baseY - 2.0),
         halfSize: Vector2(1.5, 1.5),
         kind: ObstacleKind.wood,
       ),
-
-      // 第一层横梁
+      // First platform
       Obstacle(
-        initialPosition: Vector2(baseX, baseY - 3.0),
+        initialPosition: Vector2(baseX, baseY - 3.8),
         halfSize: Vector2(5.0, 0.6),
         kind: ObstacleKind.wood,
       ),
-
-      // 第二层立柱
+      // Middle barrels
       Obstacle(
-        initialPosition: Vector2(baseX - 3, baseY - 5.5),
+        initialPosition: Vector2(baseX - 3, baseY - 6.0),
         halfSize: Vector2(1.2, 2.0),
         kind: ObstacleKind.barrel,
       ),
       Obstacle(
-        initialPosition: Vector2(baseX + 3, baseY - 5.5),
+        initialPosition: Vector2(baseX + 3, baseY - 6.0),
         halfSize: Vector2(1.2, 2.0),
         kind: ObstacleKind.barrel,
       ),
-
-      // 第二层横梁
+      // Second platform
       Obstacle(
-        initialPosition: Vector2(baseX, baseY - 8.0),
+        initialPosition: Vector2(baseX, baseY - 8.3),
         halfSize: Vector2(4.5, 0.6),
         kind: ObstacleKind.wood,
       ),
-
-      // 第三层立柱
+      // Top supports
       Obstacle(
         initialPosition: Vector2(baseX - 2, baseY - 10.5),
         halfSize: Vector2(1.2, 2.0),
@@ -135,8 +135,7 @@ class Level2 extends Component with HasGameRef<Forge2DGame> {
         halfSize: Vector2(1.2, 2.0),
         kind: ObstacleKind.wood,
       ),
-
-      // 顶层横梁
+      // Top beam
       Obstacle(
         initialPosition: Vector2(baseX, baseY - 13.0),
         halfSize: Vector2(3.5, 0.5),
@@ -144,15 +143,16 @@ class Level2 extends Component with HasGameRef<Forge2DGame> {
       ),
     ]);
 
-    // === Invisible Walls ===
+    // Invisible Walls
     final wallRect = gameRef.camera.visibleWorldRect;
     final walls = [
       EdgeShape()
-        ..set(Vector2(wallRect.left, wallRect.top), Vector2(wallRect.left, wallRect.bottom)),
+        ..set(Vector2(wallRect.left, wallRect.top),
+            Vector2(wallRect.left, wallRect.bottom)),
       EdgeShape()
-        ..set(Vector2(wallRect.right, wallRect.top), Vector2(wallRect.right, wallRect.bottom)),
+        ..set(Vector2(wallRect.right, wallRect.top),
+            Vector2(wallRect.right, wallRect.bottom)),
     ];
-
     for (final shape in walls) {
       final wallBodyDef = BodyDef()..type = BodyType.static;
       final wallBody = gameRef.world.createBody(wallBodyDef);
@@ -160,22 +160,18 @@ class Level2 extends Component with HasGameRef<Forge2DGame> {
     }
   }
 
-  // =====================================================
-  // ============ 发射与拖拽逻辑 ==========================
-  // =====================================================
-
+  // ====== Bird Control ======
   void handlePointerDown(Vector2 p) {
-    if (birdInFlight) return;
+    if (birdInFlight || levelCompleted) return;
     slingshot.beginDrag(p);
   }
 
   void handleDragMove(Vector2 p) {
-    if (birdInFlight) return;
+    if (birdInFlight || levelCompleted) return;
     slingshot.dragMove(p);
 
     final pull = p - slingshot.pivot;
     lastPull = pull;
-
     final velocity = (-pull) * slingshot.powerK;
 
     trajectory?.removeFromParent();
@@ -184,7 +180,7 @@ class Level2 extends Component with HasGameRef<Forge2DGame> {
   }
 
   void handleDragEnd() {
-    if (birdInFlight) return;
+    if (birdInFlight || levelCompleted) return;
     slingshot.endDrag();
     trajectory?.removeFromParent();
     trajectory = null;
@@ -192,27 +188,17 @@ class Level2 extends Component with HasGameRef<Forge2DGame> {
     birdInFlight = true;
   }
 
-  void handleTap(Vector2 p) {}
-
-  // =====================================================
-  // ============ 自动装填新小鸟 ==========================
-  // =====================================================
-
+  // ====== Bird Loader ======
   Future<void> _loadNextBird() async {
     if (currentShot >= maxShots) {
-      print("All birds launched!");
+      _checkFailCondition();
       return;
     }
 
     final birdSprite = Sprite(await gameRef.images.load('Red.webp'));
     const double r = 2.4;
-    final bird = Bird(
-      birdSprite,
-      radius: r,
-      start: slingshot.pivot,
-    );
+    final bird = Bird(birdSprite, radius: r, start: slingshot.pivot);
     await gameRef.world.add(bird);
-
     await bird.loaded;
     slingshot.load(bird);
 
@@ -221,9 +207,39 @@ class Level2 extends Component with HasGameRef<Forge2DGame> {
     currentShot++;
   }
 
+  // ====== Scoring & Status ======
+  void onPigDied() {
+    pigsAlive--;
+    if (pigsAlive <= 0 && !levelCompleted) {
+      levelCompleted = true;
+      final bonus = (timeLeft * 10).round();
+      final total = score + bonus;
+      final manager = gameRef.levelManager;
+      manager?.showLevelCompletedWithScore(score, bonus, total);
+    }
+  }
+
+  void _checkFailCondition() {
+    if (pigsAlive > 0 && !levelCompleted) {
+      gameRef.levelManager?.showLevelFailed();
+    }
+  }
+
+  void addScore(int value) => score += value;
+
+  // ====== Update Loop ======
   @override
   void update(double dt) {
     super.update(dt);
+
+    if (levelCompleted) return;
+
+    timeLeft -= dt;
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      _checkFailCondition();
+      return;
+    }
 
     if (activeBird == null) return;
     final pos = activeBird!.body.position;

@@ -1,7 +1,7 @@
 import 'package:flame/components.dart';
 import 'package:flame_forge2d/flame_forge2d.dart';
 
-/// 简单的小鸟：动态圆形刚体 + 贴图 + 攻击力
+
 class Bird extends BodyComponent with ContactCallbacks {
   Bird(this.sprite, {this.radius = 1.2, this.damage = 60, Vector2? start})
       : startPosition = start;
@@ -22,7 +22,7 @@ class Bird extends BodyComponent with ContactCallbacks {
 
     final b = world.createBody(def);
 
-    // ✅ userData 必须绑定
+    // userData bonding
     final fixture = FixtureDef(
       shape,
       density: 1.8,

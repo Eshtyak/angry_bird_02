@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flame/game.dart';
 import 'package:vector_math/vector_math_64.dart' as vm;
-import 'component/game.dart'; // 导入物理游戏逻辑
+import 'component/game.dart'; // 游戏逻辑
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +55,7 @@ class HomePage extends StatelessWidget {
                 constraints: BoxConstraints(maxWidth: w * maxWidthFraction),
                 child: _ButtonsStack(
                   items: [
-                    // ✅ 按钮 1：进入第一关
+                    // ✅ 按钮 1：进入第 1 关
                     _BtnItem(_btnStart, onTap: () {
                       Navigator.of(context).push(MaterialPageRoute(
                         builder: (_) => Scaffold(
@@ -63,13 +63,11 @@ class HomePage extends StatelessWidget {
                         ),
                       ));
                     }),
-                    // ✅ 按钮 2：进入第二关
+                    // ✅ 按钮 2：打开关卡选择界面
                     _BtnItem(_btnLevel, onTap: () {
-                      Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => Scaffold(
-                          body: GameWidget(game: MyPhysicsGame(selectedLevel: 2)),
-                        ),
-                      ));
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const LevelSelectPage()),
+                      );
                     }),
                     _BtnItem(_btnSetting),
                     _BtnItem(_btnRank),
@@ -84,6 +82,101 @@ class HomePage extends StatelessWidget {
         ],
       );
     });
+  }
+}
+
+/* ------------------- 新增：关卡选择页 ------------------- */
+class LevelSelectPage extends StatelessWidget {
+  const LevelSelectPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // 背景
+        Positioned.fill(
+          child: Image.asset('assets/images/HomePage.png',
+              fit: BoxFit.cover, filterQuality: FilterQuality.high),
+        ),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'SELECT LEVEL',
+                style: TextStyle(
+                  color: Colors.yellow,
+                  fontSize: 42,
+                  fontWeight: FontWeight.bold,
+                  shadows: [Shadow(color: Colors.black, offset: Offset(2, 2), blurRadius: 3)],
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // 按钮：Level 1
+              _menuButton(context, "Level 1", Colors.green, () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => Scaffold(
+                      body: GameWidget(game: MyPhysicsGame(selectedLevel: 1)),
+                    ),
+                  ),
+                );
+              }),
+
+              const SizedBox(height: 25),
+
+              // 按钮：Level 2
+              _menuButton(context, "Level 2", Colors.orange, () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => Scaffold(
+                      body: GameWidget(game: MyPhysicsGame(selectedLevel: 2)),
+                    ),
+                  ),
+                );
+              }),
+
+              const SizedBox(height: 60),
+
+              // 返回主页
+              _menuButton(context, "Back to Home", Colors.purple, () {
+                Navigator.pop(context);
+              }),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _menuButton(BuildContext context, String label, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 220,
+        height: 60,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [
+            BoxShadow(color: Colors.black54, offset: Offset(3, 3), blurRadius: 4)
+          ],
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 24,
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -12,7 +12,7 @@ class TrajectoryLine extends Component {
 
   TrajectoryLine({Vector2? start, Vector2? velocity}) {
     if (start != null && velocity != null) {
-      updatePoints(start, velocity, 25.0); // 默认重力 25
+      updatePoints(start, velocity, 25.0);
     }
   }
 

@@ -50,20 +50,22 @@ class Obstacle extends BodyComponent with ContactCallbacks {
   Body createBody() {
     final shape = PolygonShape()..setAsBoxXY(halfSize.x, halfSize.y);
 
-    final friction = (kind == ObstacleKind.wood) ? 0.5 : 0.4;
-    final density = (kind == ObstacleKind.wood) ? 1.0 : 0.7;
+    final friction = (kind == ObstacleKind.wood) ? 0.55 : 0.45;
+    final density = (kind == ObstacleKind.wood) ? 1.6 : 1.4;
 
     final fixture = FixtureDef(
       shape,
       friction: friction,
       density: density,
-      restitution: 0.05,
-    )..userData = this; // ✅ 必须绑定 userData
+      restitution: 0.02,
+    )..userData = this; // bongding userdate
 
     final def = BodyDef(
       type: bodyType,
       position: initialPosition,
       angle: initialAngle,
+      linearDamping: 1.8,
+      angularDamping: 2.5,
       userData: this,
     );
 

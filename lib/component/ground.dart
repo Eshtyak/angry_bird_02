@@ -3,14 +3,13 @@ import 'package:flame_forge2d/flame_forge2d.dart';
 import 'package:flame/components.dart';
 
 class Ground extends BodyComponent {
-  final ui.Rect rect;     // ✅ 明确使用 ui.Rect
+  final ui.Rect rect;
   final double y;
 
   Ground(this.rect, {required this.y});
 
   @override
   Body createBody() {
-    // ✅ 有厚度的地面，防止鸟穿透
     final shape = PolygonShape()
       ..setAsBox(rect.width / 2, 0.3, Vector2(rect.center.dx, y + 0.15), 0);
     final def = BodyDef(type: BodyType.static);

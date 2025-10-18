@@ -1,129 +1,191 @@
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
-import 'package:flame_forge2d/flame_forge2d.dart';
+import 'package:flame/effects.dart'; // for ScaleEffect, EffectController
+import 'package:flame_audio/flame_audio.dart';
+import 'package:flutter/material.dart';
 import '../levels/level1.dart';
+import '../levels/level2.dart';
+import '../levels/level_manager.dart';
+import 'game.dart';
 
-class GameUI extends PositionComponent with TapCallbacks {
-  final Forge2DGame game;
+class GameUI extends Component with HasGameReference<MyPhysicsGame>, TapCallbacks {
   GameUI(this.game);
+  final MyPhysicsGame game;
 
-  late SpriteComponent pauseButton;
-  late SpriteComponent resumeButton;
-  late SpriteComponent restartButton;
-  late SpriteComponent homeButton;
-  late SpriteComponent settingButton;
+  late UIButton restartButton;
+  late UIButton homeButton;
+  late UIButton settingButton;
 
-  bool isPaused = false;
+  late TextComponent timeText;
+  late TextComponent shotText;
+  late TextComponent scoreText;
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    priority = 1000;
 
-    // ✅ 屏幕尺寸（像素坐标）
-    final screenSize = game.camera.viewport.virtualSize ?? game.size;
+    final screenSize = game.size;
 
-    // ✅ 屏幕右上角位置
-    final Vector2 topRight = Vector2(screenSize.x - 60, 60);
-    const double spacing = 60.0; // 按钮间距
-    const double size = 48.0; // 按钮大小（像素）
+    // 调整整体布局：按钮位置稍微左移，避免贴边
+    const double spacing = 55.0;
+    const double size = 48.0;
+    final Vector2 topRight = Vector2(screenSize.x - 180, screenSize.y * 0.1);
 
-    // Pause
-    pauseButton = await _buildButton('pause.png', topRight, size);
-
-    // Resume
-    resumeButton = await _buildButton('keepplay.png', topRight, size);
-    resumeButton.opacity = 0;
-
-    // Restart
-    restartButton = await _buildButton(
-      'Start.png',
-      Vector2(topRight.x - spacing * 1.2, topRight.y),
-      size,
-    );
-
-    // Home
-    homeButton = await _buildButton(
-      'home.png',
+    // ====== Setting ======
+    settingButton = await UIButton.create(
+      game,
+      'gamesetting.png',
       Vector2(topRight.x - spacing * 2.4, topRight.y),
       size,
+      onTap: _onSettingPressed,
     );
 
-    // Setting
-    settingButton = await _buildButton(
-      'gamesetting.png',
-      Vector2(topRight.x - spacing * 3.6, topRight.y),
+    // ====== Home ======
+    homeButton = await UIButton.create(
+      game,
+      'home.png',
+      Vector2(topRight.x - spacing * 1.2, topRight.y),
       size,
+      onTap: _onHomePressed,
     );
 
-    addAll([pauseButton, resumeButton, restartButton, homeButton, settingButton]);
+    // ====== Restart ======
+    restartButton = await UIButton.create(
+      game,
+      'restart.png',
+      Vector2(topRight.x, topRight.y),
+      size,
+      onTap: _onRestartPressed,
+    );
+
+    // add the ui button
+    addAll([
+      settingButton,
+      homeButton,
+      restartButton,
+    ]);
+
+    // ====== Text info ======
+    const textStyle = TextStyle(
+      fontSize: 20,
+      color: Colors.white,
+      shadows: [Shadow(color: Colors.black, offset: Offset(1, 1), blurRadius: 2)],
+    );
+
+    timeText = TextComponent(
+      text: 'Time: 0.00 s',
+      position: Vector2(20, topRight.y - 12),
+      textRenderer: TextPaint(style: textStyle),
+    );
+
+    shotText = TextComponent(
+      text: 'Shots: 0 / 0',
+      position: Vector2(20, topRight.y + 24),
+      textRenderer: TextPaint(style: textStyle),
+    );
+
+    scoreText = TextComponent(
+      text: 'Score: 0',
+      position: Vector2(20, topRight.y + 60),
+      textRenderer: TextPaint(style: textStyle),
+    );
+
+    addAll([timeText, shotText, scoreText]);
   }
 
-  Future<SpriteComponent> _buildButton(
-      String imageName, Vector2 pos, double size) async {
-    final sprite = await game.loadSprite(imageName);
-    final button = SpriteComponent(
+  // restar
+  void _onRestartPressed() async {
+    await game.restartLevel();
+  }
+
+  void _onHomePressed() {
+    FlameAudio.bgm.stop();
+    Navigator.of(game.buildContext!).pop();
+  }
+
+  void _onSettingPressed() {
+    debugPrint('Settings not implemented yet.');
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+
+    final manager = game.levelManager;
+    if (manager?.activeLevel == null) return;
+
+    final level = manager!.activeLevel;
+    double timeLeft = 0;
+    int maxShots = 0;
+    int currentShot = 0;
+    int score = 0;
+
+    if (level is Level1) {
+      timeLeft = level.timeLeft;
+      maxShots = level.maxShots;
+      currentShot = level.currentShot;
+      score = level.score;
+    } else if (level is Level2) {
+      timeLeft = level.timeLeft;
+      maxShots = level.maxShots;
+      currentShot = level.currentShot;
+      score = level.score;
+    }
+
+    timeText.text = 'Time: ${timeLeft.toStringAsFixed(2)} s';
+    shotText.text = 'Shots: $currentShot / $maxShots';
+    scoreText.text = 'Score: $score';
+  }
+}
+
+// public ui button
+class UIButton extends SpriteComponent with TapCallbacks {
+  final VoidCallback? onTap;
+  bool _active = true;
+
+  bool get isActive => _active;
+  set isActive(bool value) {
+    _active = value;
+    opacity = value ? 1.0 : 0.0;
+  }
+
+  UIButton({
+    required Sprite sprite,
+    required Vector2 position,
+    required Vector2 size,
+    this.onTap,
+  }) : super(sprite: sprite, position: position, size: size, anchor: Anchor.center);
+
+  static Future<UIButton> create(
+      MyPhysicsGame game,
+      String asset,
+      Vector2 position,
+      double size, {
+        VoidCallback? onTap,
+      }) async {
+    final sprite = Sprite(await game.images.load(asset));
+    return UIButton(
       sprite: sprite,
+      position: position,
       size: Vector2.all(size),
-      position: pos,
-      anchor: Anchor.center,
-      priority: 1000, // ✅ 确保覆盖游戏场景
+      onTap: onTap,
     );
-    return button;
   }
 
   @override
   void onTapDown(TapDownEvent event) {
-    final p = event.localPosition;
-
-    if (pauseButton.containsPoint(p) && !isPaused) {
-      _onPausePressed();
-    } else if (resumeButton.containsPoint(p) && isPaused) {
-      _onResumePressed();
-    } else if (restartButton.containsPoint(p)) {
-      _onRestartPressed();
-    } else if (homeButton.containsPoint(p)) {
-      _onHomePressed();
-    } else if (settingButton.containsPoint(p)) {
-      _onSettingPressed();
+    add(
+      ScaleEffect.to(
+        Vector2.all(0.9),
+        EffectController(duration: 0.05),
+        onComplete: () {
+          add(ScaleEffect.to(Vector2.all(1.0), EffectController(duration: 0.05)));
+        },
+      ),
+    );
+    if (_active) {
+      onTap?.call();
     }
-  }
-
-  // ================= 按钮逻辑 =================
-  void _onPausePressed() {
-    if (!isPaused) {
-      game.pauseEngine();
-      isPaused = true;
-      pauseButton.opacity = 0;
-      resumeButton.opacity = 1;
-      print("Game paused");
-    }
-  }
-
-  void _onResumePressed() {
-    if (isPaused) {
-      game.resumeEngine();
-      isPaused = false;
-      resumeButton.opacity = 0;
-      pauseButton.opacity = 1;
-      print("Game resumed");
-    }
-  }
-
-  void _onRestartPressed() async {
-    print("Restarting...");
-    game.world.removeAll(game.world.children);
-    final newLevel = Level1();
-    await game.world.add(newLevel);
-    isPaused = false;
-    pauseButton.opacity = 1;
-    resumeButton.opacity = 0;
-  }
-
-  void _onHomePressed() {
-    print("Back to main menu (not implemented)");
-  }
-
-  void _onSettingPressed() {
-    print("Open settings (not implemented)");
   }
 }
