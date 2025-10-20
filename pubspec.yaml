@@ -35,3 +35,5 @@ flutter:
     - assets/
     - assets/images/
     - assets/audio/
+    - assets/images/ball_red_small.png
+    - assets/images/target-small.png

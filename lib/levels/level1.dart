@@ -73,7 +73,7 @@ class Level1 extends Component with HasGameRef<MyPhysicsGame> {
     await _loadNextBird();
 
     // Pig
-    final pigSprite = Sprite(await gameRef.images.load('JellyPig.png'));
+    final pigSprite = Sprite(await gameRef.images.load('target-small.png'));
     await gameRef.world.add(
       Pig(Vector2(rect.right - 12, groundY - 2.4), pigSprite, radius: 2.4),
     );
