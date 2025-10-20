@@ -157,7 +157,7 @@ class Level1 extends Component with HasGameRef<MyPhysicsGame> {
   Future<void> _loadNextBird() async {
     if (currentShot >= maxShots) return;
 
-    final birdSprite = Sprite(await gameRef.images.load('Red.webp'));
+    final birdSprite = Sprite(await gameRef.images.load('ball_red_small.png'));
     const double r = 2.4;
     final bird = Bird(birdSprite, radius: r, start: slingshot.pivot);
     await gameRef.world.add(bird);
